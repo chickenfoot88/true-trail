@@ -20,6 +20,7 @@ import com.dukascopy.api.IEngine;
 import com.dukascopy.api.IHistory;
 import com.dukascopy.api.IMessage;
 import com.dukascopy.api.IOrder;
+import com.dukascopy.api.ICloseOrder;
 import com.dukascopy.api.IStrategy;
 import com.dukascopy.api.ITick;
 import com.dukascopy.api.ITimeDomain;
@@ -62,6 +63,7 @@ import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.SwingConstants;
 
+
 @RequiresFullAccess
 public class TrueTrail implements IStrategy {
      static class NoLossMode {
@@ -98,18 +100,18 @@ public class TrueTrail implements IStrategy {
     @Configurable(value = "Trail TP")                           public boolean isTrailTP = false;
     @Configurable(value = "TP trail, pips")                     public double trailTakeProfit = 10.0;
     @Configurable(value = "TP trail step, pips")                public double trailStepTP = 10.0;
-    @Configurable(value = "Close Order by ATR")                 public boolean isCloseOrder = false;
-    @Configurable(value = "ATR treshhold to close order")       public double closeOrderProfitShare = 50;
-    @Configurable(value = "Amount of order to close by ATR")    public double closeOrder = 50;
+    @Configurable(value = "TP by ATR")                          public boolean isTPbyATR = false;
+    @Configurable(value = "ATR portion for TP, %")              public double ATRPortionForTP = 50;
+    @Configurable(value = "TP size by ATR, %")                  public double TPSizeByATR = 50;
     @Configurable(value = "ATR Period")                         public Period periodATR = Period.DAILY;
     @Configurable(value = "ATR Bars Count")                     public int barsCountATR = 100;
     @Configurable(value = "Enable Sound")                       public boolean enableSound = false;
     @Configurable(value = "Sound NoLoss")                       public File soundNoLoss = new File("noloss.wav");
     @Configurable(value = "Sound Trail")                        public File soundTrail = new File("trail.wav");
-    @Configurable(value = "Sound Close Position")       public File soundClose = new File("close.wav");
-    @Configurable(value = "Sound Open Position")        public File soundOpen = new File("open.wav");
-    @Configurable(value = "Profit color")               public Color profitColor = Color.GREEN;
-    @Configurable(value = "Loss color")                 public Color lossColor = Color.RED;
+    @Configurable(value = "Sound Close Position")               public File soundClose = new File("close.wav");
+    @Configurable(value = "Sound Open Position")                public File soundOpen = new File("open.wav");
+    @Configurable(value = "Profit color")                       public Color profitColor = Color.GREEN;
+    @Configurable(value = "Loss color")                         public Color lossColor = Color.RED;
           
     private IEngine engine;
     private IConsole console;
@@ -218,13 +220,20 @@ public class TrueTrail implements IStrategy {
                 
         if (instrument == this.instrument) {
             for (IOrder order : engine.getOrders(instrument)) {
-                print("Order %s", order.getCloseHistory());
                 if (order.getState() == IOrder.State.FILLED) {
-                    double profitLossInPips = order.getProfitLossInPips();
-                    if(isCloseOrder && profitLossInPips >= ATR * (closeOrderProfitShare / 100)) {
-                        double closeAmount = order.getAmount() / 2;
-                        order.close(closeAmount);
-                        print("Cделки в размере %s закрыта по", closeAmount);
+                    if(isTPbyATR) {
+                        List<ICloseOrder> closeOrderHistory = order.getCloseHistory();
+                        if (closeOrderHistory == null || closeOrderHistory != null && closeOrderHistory.isEmpty()) {
+                            double profitLossInPips = order.getProfitLossInPips();
+                            if(profitLossInPips >= ATR * (ATRPortionForTP / 100)) {
+                                double TPSize = order.getAmount() * (TPSizeByATR / 100);
+                                order.close(TPSize);
+                            }
+                           
+                        } else {
+                            print("Order %s was previously partially closed. TP by ATR disabled", order.getId());
+                            isTPbyATR = false;
+                        }
                     };
                     if(noLossMode != NoLossMode.NOT_SETTLED) {
                         if (profitLossInPips >= noLoss) {
@@ -548,8 +557,6 @@ public class TrueTrail implements IStrategy {
             JPanel panel = widget.getContentPanel();
             Component[] components = panel.getComponents();
             for (Component component : components) {
-//                print("Is No Loss Triggered"); // remove
-//                print(isNoLossTriggered); // remove
                 if(isNoLossTriggered && component.getName() != null && component.getName().equals("WIDGET_NOLOSS")) {
                     JLabel jLabelNoLossValue = (JLabel) component;
                     jLabelNoLossValue.setForeground(profitColor);
