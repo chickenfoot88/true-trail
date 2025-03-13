@@ -4,6 +4,9 @@
  * email: support@fxdiler.com
  * skype: fxdiler
  */
+/*
+ True Trail v2.1
+*/
 
  package jforex;
 
@@ -324,14 +327,7 @@
          int captionFontSize = widgetHeight/10;
          int labelFontSize = widgetHeight/10 - 1;
          final Dimension widgetDimension = new Dimension(widgetWidth, widgetHeight);
-         
-         JLabel jLabelCaption = new JLabel("True Trail");
-         jLabelCaption.setForeground(chart.getCommentColor());
-         jLabelCaption.setHorizontalAlignment(SwingConstants.CENTER);
-         jLabelCaption.setHorizontalTextPosition(SwingConstants.CENTER);
-         jLabelCaption.setFont(new Font("SansSerif", Font.BOLD, captionFontSize));
-         jLabelCaption.setPreferredSize(new Dimension(captionWidth, captionHeight));
-         
+                 
          // Безубыток
          JLabel jLabelNoLoss = new JLabel("Безубыток: ");
          jLabelNoLoss.setForeground(chart.getCommentColor());
@@ -432,7 +428,6 @@
          JPanel panel = widget.getContentPanel();
          panel.setMaximumSize(widgetDimension);
          panel.setMinimumSize(widgetDimension);
-         panel.add(jLabelCaption);
          panel.add(jLabelNoLoss);
          panel.add(jLabelNoLossValue);
          panel.add(jLabelBuyValue);
