@@ -316,7 +316,7 @@
      }
      
      private void addWidget(final IChart chart) throws JFException {
-         int widgetWidth = 180*widgetSize/100;
+         int widgetWidth = 250*widgetSize/100;
          int widgetHeight = 115*widgetSize/100;
          int captionWidth = widgetWidth;
          int captionHeight = widgetHeight/10;
@@ -533,7 +533,7 @@
                  }
                  if (component.getName() != null && component.getName().equals("WIDGET_ATR")) {
                      JLabel jLabelATRValue = (JLabel) component;
-                     jLabelATRValue.setText(String.format("%.1f pips", ATR));
+                     jLabelATRValue.setText(String.format("%.1f pips", ATR) + " / " + periodATR + " / " + barsCountATR);
                  }
              }
          }
