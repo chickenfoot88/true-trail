@@ -61,14 +61,34 @@
  
  @RequiresFullAccess
  public class TrueTrail implements IStrategy {
+
+    static class NoLossMode {
+        public static final NoLossMode NO_LOSS_NOT_SETTLED = new NoLossMode("Not settled", 0);
+        public static final NoLossMode NO_LOSS_MANUAL = new NoLossMode("Manual no loss", 1);
+        public static final NoLossMode NO_LOSS_BY_ATR = new NoLossMode("No loss by ATR", 2);
+        
+        public final String name;
+        public final Number id;        
+        
+        public NoLossMode(String name, Number id){
+            this.name = name;
+            this.id = id;
+        }
+        
+        @Override 
+        public String toString(){
+            return name;
+        }
+    }
      
      @Configurable(value = "Instrument")                 public Instrument instrument = Instrument.EURUSD;
      @Configurable(value = "Set StopLoss")               public boolean isSetSL = true;
      @Configurable(value = "StopLoss, pips")             public double stopLoss = 50.0;
      @Configurable(value = "Set TakeProfit")             public boolean isSetTP = true;
      @Configurable(value = "TakeProfit, pips")           public double takeProfit = 100.0;
-     @Configurable(value = "Set NoLoss")                 public boolean isSetNL = true;
-     @Configurable(value = "NoLoss, pips")               public double noLoss = 12.0;
+     @Configurable(value = "Set NoLoss Mode")            public NoLossMode noLossMode = NoLossMode.NO_LOSS_NOT_SETTLED;
+     @Configurable(value = "NoLoss Manual, pips")        public double noLossManual = 12.0;
+     @Configurable(value = "NoLoss by ATR, %")           public double noLossByATR = 20;
      @Configurable(value = "Delta NoLoss, pips")         public double deltaNoLoss = 2.0;
      @Configurable(value = "Trail SL")                   public boolean isTrailSL = true;
      @Configurable(value = "SL trail, pips")             public double trailStopLoss = 20.0;
@@ -87,6 +107,7 @@
      @Configurable(value = "Profit color")               public Color profitColor = Color.GREEN;
      @Configurable(value = "Loss color")                 public Color lossColor = Color.RED;
      
+     
      private IEngine engine;
      private IConsole console;
      private IHistory history;
@@ -100,6 +121,8 @@
      private final long delay = 1500;
      private double ATR;
      private List<IOrder> historyOrders;
+     public double noLoss;
+     public boolean isNoLossTriggered;
      
      @Override
      public void onStart(IContext context) throws JFException {
@@ -170,6 +193,14 @@
                      }
                  }
              });
+
+             if(noLossMode != NoLossMode.NO_LOSS_NOT_SETTLED) {
+                if(noLossMode == NoLossMode.NO_LOSS_MANUAL) {
+                    noLoss = noLossManual;
+                } else if (noLossMode == NoLossMode.NO_LOSS_BY_ATR) {
+                    noLoss = ATR * noLossByATR/100;
+                };
+            }
              
              addWidget(chart);
              updateWidgetComponents();
@@ -181,21 +212,25 @@
          if (instrument == this.instrument) {
              for (IOrder order : engine.getOrders(instrument)) {
                  if (order.getState() == IOrder.State.FILLED) {
-                     if (isSetNL) {
+                     if (noLossMode != NoLossMode.NO_LOSS_NOT_SETTLED) {
                          if (order.getProfitLossInPips() >= noLoss) {
                              if (order.isLong()) {  // BUY
                                  double sl = nd(order.getOpenPrice() + deltaNoLoss*getPoint(), getDigits());
                                  if (order.getStopLossPrice() < sl) {
+                                     isNoLossTriggered = true;
                                      order.setStopLossPrice(sl);
                                      if (enableSound && engine.getType() != IEngine.Type.TEST) {
                                          playSound(soundNoLoss);
                                      }
+                                  } else if(order.getStopLossPrice() == sl) {
+                                     isNoLossTriggered = true;
                                  }
                              }
                              if (!order.isLong()) {  // SELL
                                  double sl = nd(order.getOpenPrice() - deltaNoLoss*getPoint(), getDigits());
                                  if (order.getStopLossPrice() > sl || order.getStopLossPrice() == 0) {
                                      order.setStopLossPrice(sl);
+                                     isNoLossTriggered = true;
                                      if (enableSound && engine.getType() != IEngine.Type.TEST) {
                                          playSound(soundNoLoss);
                                      }
@@ -316,7 +351,7 @@
      }
      
      private void addWidget(final IChart chart) throws JFException {
-         int widgetWidth = 250*widgetSize/100;
+         int widgetWidth = 320*widgetSize/100;
          int widgetHeight = 115*widgetSize/100;
          int captionWidth = widgetWidth;
          int captionHeight = widgetHeight/10;
@@ -329,14 +364,14 @@
          final Dimension widgetDimension = new Dimension(widgetWidth, widgetHeight);
                  
          // Безубыток
-         JLabel jLabelNoLoss = new JLabel("Безубыток: ");
+         JLabel jLabelNoLoss = new JLabel(noLossMode == NoLossMode.NO_LOSS_BY_ATR ? "Безубыток по ATR: " : "Безубыток: ");
          jLabelNoLoss.setForeground(chart.getCommentColor());
          jLabelNoLoss.setHorizontalAlignment(SwingConstants.LEFT);
          jLabelNoLoss.setHorizontalTextPosition(SwingConstants.LEFT);
          jLabelNoLoss.setFont(new Font("SansSerif", Font.PLAIN, labelFontSize));
          jLabelNoLoss.setPreferredSize(new Dimension(labelWidth, labelHeight));
          
-         JLabel jLabelNoLossValue = new JLabel(String.format("%.1f pips", noLoss));
+         JLabel jLabelNoLossValue = new JLabel(String.format("Порог: %.1f pips", noLoss) + " / " + String.format("Размер: %.1f", deltaNoLoss));
          jLabelNoLossValue.setName("WIDGET_NOLOSS");
          jLabelNoLossValue.setForeground(chart.getCommentColor());
          jLabelNoLossValue.setFont(new Font("SansSerif", Font.PLAIN, labelFontSize));
