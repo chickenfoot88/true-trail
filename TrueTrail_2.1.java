@@ -531,6 +531,11 @@
              JPanel panel = widget.getContentPanel();
              Component[] components = panel.getComponents();
              for (Component component : components) {
+                if(isNoLossTriggered && component.getName() != null && component.getName().equals("WIDGET_NOLOSS")) {
+                    JLabel jLabelNoLossValue = (JLabel) component;
+                    jLabelNoLossValue.setForeground(profitColor);
+                }
+                
                  if (component.getName() != null && component.getName().equals("WIDGET_BUYVAL")) {
                      JLabel jLabelBuyValue = (JLabel) component;
                      jLabelBuyValue.setText(String.format("BUY %d (%.3f)", longCount, longAmount));
