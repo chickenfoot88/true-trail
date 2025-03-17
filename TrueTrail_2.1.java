@@ -58,6 +58,7 @@
  import javax.swing.JOptionPane;
  import javax.swing.JPanel;
  import javax.swing.SwingConstants;
+ import com.dukascopy.api.ICloseOrder;
  
  @RequiresFullAccess
  public class TrueTrail implements IStrategy {
@@ -96,6 +97,9 @@
      @Configurable(value = "Trail TP")                   public boolean isTrailTP = false;
      @Configurable(value = "TP trail, pips")             public double trailTakeProfit = 10.0;
      @Configurable(value = "TP trail step, pips")        public double trailStepTP = 10.0;
+     @Configurable(value = "Partial close by ATR")       public boolean isPartialCloseByATR = false;
+     @Configurable(value = "Partial close by ATR. ATR level, %") public float partialCloseByATRLevel = 50;
+     @Configurable(value = "Partial close by ATR. Order size, %")  public float partialCloseByATRSize = 50;
      @Configurable(value = "ATR Period")                 public Period periodATR = Period.ONE_HOUR;
      @Configurable(value = "ATR Bars Count")             public int barsCountATR = 200;
      @Configurable(value = "Enable Sound")               public boolean enableSound = false;
@@ -123,6 +127,7 @@
      private List<IOrder> historyOrders;
      public double noLoss;
      public boolean isNoLossTriggered;
+     public boolean isPartialCloseByATRTriggered;
      
      @Override
      public void onStart(IContext context) throws JFException {
@@ -212,6 +217,7 @@
          if (instrument == this.instrument) {
              for (IOrder order : engine.getOrders(instrument)) {
                  if (order.getState() == IOrder.State.FILLED) {
+       
                      if (noLossMode != NoLossMode.NO_LOSS_NOT_SETTLED) {
                          if (order.getProfitLossInPips() >= noLoss) {
                              if (order.isLong()) {  // BUY
@@ -238,6 +244,23 @@
                              }
                          }
                      }
+
+                     if(isPartialCloseByATR) { // Partial close by AR
+                        List<ICloseOrder> closeOrderHistory = order.getCloseHistory();
+                        if (closeOrderHistory == null || closeOrderHistory != null && closeOrderHistory.isEmpty()) {
+                            double profitLossInPips = order.getProfitLossInPips();
+                            if(profitLossInPips >= ATR * (partialCloseByATRLevel / 100)) {
+                                double orderSize = order.getAmount() * (partialCloseByATRSize / 100);
+                                order.close(orderSize);
+                                isPartialCloseByATRTriggered = true;
+                            }
+                           
+                        } else {
+                            print("Order %s was previously partially closed. Partial Close by ATR now disabled", order.getId());
+                            isPartialCloseByATR = false;
+                        }
+                    };
+
                      if (isTrailSL) {
                          if (order.isLong()) {  // BUY
                              double sl = nd(tick.getBid() - trailStopLoss*getPoint(), getDigits());
@@ -351,7 +374,7 @@
      }
      
      private void addWidget(final IChart chart) throws JFException {
-         int widgetWidth = 320*widgetSize/100;
+         int widgetWidth = 410*widgetSize/100;
          int widgetHeight = 115*widgetSize/100;
          int captionWidth = widgetWidth;
          int captionHeight = widgetHeight/10;
@@ -376,6 +399,25 @@
          jLabelNoLossValue.setForeground(chart.getCommentColor());
          jLabelNoLossValue.setFont(new Font("SansSerif", Font.PLAIN, labelFontSize));
          jLabelNoLossValue.setPreferredSize(new Dimension(componentWidth, componentHeight));
+
+         // Частичное закрытие по ATR
+         JLabel jLabelPartialCloseByATR = new JLabel("Закрытие по ATR");
+         jLabelPartialCloseByATR.setForeground(chart.getCommentColor());
+         jLabelPartialCloseByATR.setHorizontalAlignment(SwingConstants.LEFT);
+         jLabelPartialCloseByATR.setHorizontalTextPosition(SwingConstants.LEFT);
+         jLabelPartialCloseByATR.setFont(new Font("SansSerif", Font.PLAIN, labelFontSize));
+         jLabelPartialCloseByATR.setPreferredSize(new Dimension(labelWidth, labelHeight));
+
+         JLabel jLabelPartialCloseByATRValue =
+            new JLabel(
+                String.format("Порог: %.0f %%", partialCloseByATRLevel) + 
+                String.format("%.1f pips / ", ATR * (partialCloseByATRLevel/100)) + 
+                String.format("Размер: %.0f %%", partialCloseByATRSize)
+            );
+         jLabelPartialCloseByATRValue.setName("WIDGET_PARTIAL_CLOSE_BY_ATR");
+         jLabelPartialCloseByATRValue.setForeground(chart.getCommentColor());
+         jLabelPartialCloseByATRValue.setFont(new Font("SansSerif", Font.PLAIN, labelFontSize));
+         jLabelPartialCloseByATRValue.setPreferredSize(new Dimension(componentWidth, componentHeight));
          
          // BUY & SELL
          JLabel jLabelBuyValue = new JLabel(String.format("BUY %d (%.3f)", 0, 0.000));
@@ -475,6 +517,8 @@
          panel.add(jLabelTotalProfitValue);
          panel.add(jLabelATR);
          panel.add(jLabelATRValue);
+         panel.add(jLabelPartialCloseByATR);
+         panel.add(jLabelPartialCloseByATRValue);
          chart.add(widget);
          chart.repaint();
      }
@@ -535,7 +579,12 @@
                     JLabel jLabelNoLossValue = (JLabel) component;
                     jLabelNoLossValue.setForeground(profitColor);
                 }
-                
+
+                if(isPartialCloseByATRTriggered && component.getName() != null && component.getName().equals("WIDGET_PARTIAL_CLOSE_BY_ATR")) {
+                    JLabel jLabelPartialCloseByATRValue = (JLabel) component;
+                    jLabelPartialCloseByATRValue.setForeground(profitColor);
+                }
+
                  if (component.getName() != null && component.getName().equals("WIDGET_BUYVAL")) {
                      JLabel jLabelBuyValue = (JLabel) component;
                      jLabelBuyValue.setText(String.format("BUY %d (%.3f)", longCount, longAmount));
